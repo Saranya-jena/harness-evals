@@ -469,8 +469,10 @@ Always set success=true."""
         if not desired:
             return True
         options = _select_options(content)
+        # Empty options cannot be matched deterministically — treat as miss so
+        # llm_on_miss can fall back instead of raising ValueError downstream.
         if not options:
-            return False
+            return True
         return _select_option(options, desired) is None
 
     def _multi_select_would_miss(self, payload: dict, golden: ConversationGolden) -> bool:
@@ -483,8 +485,10 @@ Always set success=true."""
         if not desired:
             return True
         options = _select_options(content)
+        # Empty options cannot be matched deterministically — treat as miss so
+        # llm_on_miss can fall back instead of raising ValueError downstream.
         if not options:
-            return False
+            return True
         return not _select_options_multi(options, desired)
 
     def _raise_unresolved(

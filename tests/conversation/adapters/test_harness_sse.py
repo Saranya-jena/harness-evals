@@ -204,6 +204,61 @@ async def test_llm_on_miss_falls_back_when_matcher_misses():
 
 
 @pytest.mark.unit
+async def test_llm_on_miss_falls_back_when_select_options_empty():
+    """Empty option lists must miss so llm_on_miss can answer instead of raising."""
+
+    class ScriptedLLM(BaseLLM):
+        async def generate(self, prompt: str, **kwargs) -> str:
+            return ""
+
+        async def generate_json(self, prompt: str, schema: dict, **kwargs) -> dict:
+            return {
+                "result": {
+                    "success": True,
+                    "action_id": "respond",
+                    "selection": "Environment-based",
+                }
+            }
+
+    golden = ConversationGolden(
+        id="ce-empty-select-options",
+        scenario="Create a CCM cost category",
+        expected_outcome="Cost category created",
+        elicitation_hints={
+            "llm_on_miss": True,
+            "intents": {"bucket_type": "Environment-based"},
+            "matchers": [
+                {
+                    "intent": "bucket_type",
+                    "question_contains": ["what buckets do you want", "buckets do you want to create"],
+                }
+            ],
+        },
+    )
+    pending = PendingHumanInput.from_metadata(
+        {
+            "type": "elicitation_select",
+            "payload": {
+                "review_id": "ask-buckets",
+                "content": {
+                    "question": "What buckets do you want to create for this cost category?",
+                    "items": [],
+                },
+            },
+        }
+    )
+
+    adapter = HarnessSseElicitationAdapter()
+    adapter.llm = ScriptedLLM()
+    result = await adapter.respond(pending, golden, [])
+
+    assert result["result"]["selection"] == "Environment-based"
+    assert len(adapter.intent_misses) == 1
+    assert adapter.intent_misses[0].reason == "hint_miss_llm_fallback"
+    assert adapter.intent_misses[0].fallback == "llm"
+
+
+@pytest.mark.unit
 async def test_category_name_stays_deterministic_with_llm_on_miss():
     class FailingLLM(BaseLLM):
         async def generate(self, prompt: str, **kwargs) -> str:
