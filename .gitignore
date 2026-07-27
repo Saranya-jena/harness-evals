@@ -29,6 +29,7 @@ Thumbs.db
 
 .idea/
 .vscode/
+.cursor/
 *.code-workspace
 *.swp
 *.swo

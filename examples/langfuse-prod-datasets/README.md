@@ -4,13 +4,6 @@ This directory contains a reproducible pipeline for sampling Harness Agent v3
 conversations from production Langfuse traces and categorizing them without
 re-running the agent.
 
-## Team workflow skill
-
-Use the project skill `build-conversation-eval-dataset` when selecting
-production conversations, writing portable overrides and elicitation hints,
-tuning expected outcomes/SSE checks, or investigating low live-eval scores. Its
-source is `.cursor/skills/build-conversation-eval-dataset/SKILL.md`.
-
 ## Artifacts
 
 Each selected session has three files:
