@@ -1,8 +1,12 @@
 # Production Conversation Quality Dataset
 
 This directory contains a reproducible pipeline for sampling Harness Agent v3
-conversations from production Langfuse traces and categorizing them without
-re-running the agent.
+conversations from production Langfuse traces and turning them into portable
+live-eval goldens. Early steps only prepare and categorize fetched
+conversations — they do **not** run the live agent.
+
+Unless a section says otherwise, run the commands below from
+`examples/langfuse-prod-datasets/`.
 
 ## Artifacts
 
@@ -10,10 +14,11 @@ Each selected session has three files:
 
 - `*.md` — human-readable transcript
 - `*.tools.json` — complete tool requests and responses
-- `*.conversation.json` — canonical cleaned conversation used by dataset export
+- `*.conversation.json` — canonical cleaned conversation used by later steps
 
-Each `eval-datasets/*.jsonl` file contains multiple validated, pre-captured
-`EvalCase` rows for one judge batch.
+Each `review-batches/*.jsonl` file is an **offline judge-input batch**: multiple
+pre-captured conversations packaged for categorization. These are not live
+goldens and are not used by `harness-evals run`.
 
 ## 1. Fetch a fresh sample
 
@@ -44,48 +49,125 @@ python scripts/build_agent_transcripts.py \
   --fetch-missing
 ```
 
-## 3. Build EvalCase batches
+## 3. Build offline review batches
+
+Package canonical conversations into judge-input JSONL for the offline
+categorization step. This does not invoke the agent and does not create live
+goldens.
 
 ```bash
-python scripts/build_eval_dataset.py --source module-coverage --limit 5
-python scripts/build_eval_dataset.py --source module-coverage --limit 10
-python scripts/build_eval_dataset.py --source module-coverage --limit 30
+python scripts/build_review_batches.py --source module-coverage --limit 5
+python scripts/build_review_batches.py --source module-coverage --limit 10
+python scripts/build_review_batches.py --source module-coverage --limit 30
 ```
 
-The exporter writes eligible EvalCases and a sibling `*.ineligible.jsonl` file
-for structurally unusable conversations. It validates every eligible row with
-`EvalCase.from_dict()`.
+The exporter writes eligible rows under `review-batches/` and a sibling
+`*.ineligible.jsonl` file for structurally unusable conversations. Eligible
+rows are validated with `EvalCase.from_dict()` so the judge runner can reuse
+SDK helpers.
 
-## 4. Validate without an LLM call
+## 4. Validate a review batch without categorizing
 
 ```bash
 python scripts/run_conversation_quality_eval.py \
-  --input eval-datasets/module-coverage-005.jsonl \
+  --input review-batches/module-coverage-005.jsonl \
   --validate-only
 ```
 
-## 5. Run the initial judge calibration
+This optional check validates the input rows and configuration. It does not call
+an LLM and does not assign categories.
+
+## 5. Categorize conversations with the offline judge
 
 ```bash
 export OPENAI_API_KEY=...
 python scripts/run_conversation_quality_eval.py \
-  --input eval-datasets/module-coverage-005.jsonl \
+  --input review-batches/module-coverage-005.jsonl \
   --provider openai \
   --model gpt-4o
 ```
 
+The judge reads each complete conversation and assigns:
+
+- `usefulness`: `useful` or `useless`
+- `quality` (agent outcome):
+  - `good` — agent substantially satisfied the request
+  - `bad` — agent materially failed
+  - `unclear` — evidence is insufficient to decide good vs bad
+  - `not_applicable` — only when usefulness is useless
+- `golden_readiness` (portability; independent of quality):
+  - `ready` — portable with only org/project placeholders
+  - `needs_rewrite` — keep it, but rewrite production-specific entity refs first
+    (can apply to good *or* bad outcomes)
+
+`final_category` is kept as a compatibility alias of agent `quality` (or
+`useless` when usefulness is useless). It is **not** where portability lives.
+
 The runner writes:
 
-- `results.jsonl` — detailed category, component scores, confidence, reasoning,
+- `results.jsonl` — detailed categories, component scores, confidence, reasoning,
   and cited evidence
-- `review.csv` — blank human category/notes columns for calibration
-- `summary.json` — category/module distribution and run configuration
+- `review.csv` — blank human quality / golden_readiness / notes columns
+- `summary.json` — quality/readiness/module distribution and run configuration
 
-The judge separates dataset usefulness (`useful | useless`) from agent quality
-(`good | bad | unclear | not_applicable`). Human notes are not included in the
-judge prompt.
+Human notes are not included in the judge prompt.
 
-## 6. Build live conversation goldens
+## 6. Export categorization results to Excel
+
+Combine one or more judge result files into a review workbook:
+
+```bash
+python scripts/export_categorization_workbook.py \
+  --results results/module-coverage-100/results.jsonl \
+  --results results/random-100/results.jsonl \
+  --output results/conversation-categorization.xlsx
+```
+
+The workbook contains:
+
+- `Insights` — category and golden-readiness summaries, prompt themes,
+  high-error patterns, and module/environment breakdowns
+- `All Results` — all categorized conversations
+- One sheet per supplied result dataset
+
+The exporter requires `openpyxl`.
+
+## 6b. Track golden inventory (`goldens.csv`)
+
+`goldens.csv` is the inventory of prompts/sessions that are already in
+`examples/prod-conversation.goldens.jsonl` plus new candidates classified as
+`golden_readiness=ready` in recent categorization runs. Agent `quality` does not
+filter this inventory: `bad` and `unclear` rows can be portable negative or
+regression goldens.
+
+Regenerate / refresh it after new categorization:
+
+```bash
+python scripts/export_goldens_csv.py \
+  --results results/module-coverage-200/results.jsonl \
+  --results results/random-200/results.jsonl \
+  --output goldens.csv
+```
+
+The script backfills judge scores, reasoning, canonical files, scenario type,
+and provisional `golden_id` values from:
+
+- `prod-conversation.goldens.jsonl` / `.manifest.jsonl`
+- any `results/*/results.jsonl` that contain those conversation IDs
+
+| Column | Meaning |
+|---|---|
+| `status` | `in_goldens` = already in the JSONL; `candidate` = judged `ready`, pending promotion |
+| `date_added` | When the row entered this inventory |
+| `date_promoted` | When a candidate was written into `prod-conversation.goldens.jsonl` (blank until promoted) |
+| `dataset_source` | `prod-conversation.goldens.jsonl`, `module-coverage-200`, `random-200`, etc. |
+| `portability_action` | Manifest action for promoted rows; `pending_review` for candidates |
+
+Fill `notes` during human review. When a candidate is promoted, set
+`status=in_goldens`, fill `date_promoted`, and rebuild the JSONL via
+`build_conversation_goldens.py` (then re-run `export_goldens_csv.py`).
+
+## 7. Build live conversation goldens
 
 Turn the categorized conversations into environment-portable
 `ConversationGolden` rows that the live Harness SSE conversation runner can
@@ -106,9 +188,11 @@ Outputs (under the repo `examples/` directory):
 
 ### What the converter does
 
-- **Filters** on the judge's `final_category`: keeps `good` / `bad` / `unclear`,
-  drops `useless`. Pipeline error-analysis conversations are dropped (they need a
-  specific failed execution that will not exist in the eval environment).
+- **Filters** on agent `quality`: keeps `good` / `bad` / `unclear`, drops
+  `useless`. Pipeline error-analysis conversations are also dropped (they need a
+  specific failed execution that will not exist in the eval environment). Legacy
+  review rows labeled `needs_improvement` map to `quality=good` +
+  `golden_readiness=needs_rewrite`.
 - **Ignores review-gate injections.** Synthetic platform messages ("The user
   approved the entity ...", "The user provided the following values ...") are
   elicitation continuations, not real user turns, so they never become scripted
@@ -132,11 +216,15 @@ rewrites keyed by full `conversation_id`. Each entry either sets
 `expected_outcome`, and `turns`/`initial_prompt`. Never put concrete identifiers
 in `elicitation_hints`.
 
-### 7. Run the goldens against a live agent
+## 8. Run the goldens against a live agent
 
 Use a **disposable eval project** — write rows create real entities.
 
+Run this command from the repository root (`harness-evals/`), not from this
+dataset directory:
+
 ```bash
+cd ../..
 export SSE_ENDPOINT_URL=http://localhost:8000/stream
 export HARNESS_ACCOUNT=...
 export HARNESS_ORG=...

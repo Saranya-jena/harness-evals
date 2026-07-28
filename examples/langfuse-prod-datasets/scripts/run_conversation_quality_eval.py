@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""Categorize pre-captured EvalCase JSONL without invoking the Harness agent.
+"""Categorize offline review batches without invoking the Harness agent.
+
+Reads judge-input JSONL produced by ``build_review_batches.py`` (pre-captured
+conversations). This step only assigns usefulness / agent quality /
+golden_readiness categories for golden curation — it does not run the live
+agent eval.
 
 The script uses the Harness Evals SDK's EvalCase, metric, Score, and async
 evaluation paths. Human labels/notes are never added to the judge prompt.
 
 Usage:
   python scripts/run_conversation_quality_eval.py \
-      --input eval-datasets/module-coverage-005.jsonl --validate-only
+      --input review-batches/module-coverage-005.jsonl --validate-only
 
   OPENAI_API_KEY=... python scripts/run_conversation_quality_eval.py \
-      --input eval-datasets/module-coverage-005.jsonl \
+      --input review-batches/module-coverage-005.jsonl \
       --provider openai --model gpt-4o
 """
 
@@ -89,6 +94,7 @@ async def evaluate_cases(
             "canonical_file": case_metadata.get("canonical_file"),
             "usefulness": score_metadata.get("usefulness", "useful"),
             "quality": score_metadata.get("quality", "unclear"),
+            "golden_readiness": score_metadata.get("golden_readiness", "needs_rewrite"),
             "final_category": score_metadata.get("final_category", "unclear"),
             "score": score.value,
             "passed": score.passed,
@@ -118,6 +124,7 @@ def deterministic_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "canonical_file": row.get("canonical_file"),
             "usefulness": "useless",
             "quality": "not_applicable",
+            "golden_readiness": "needs_rewrite",
             "final_category": "useless",
             "score": 0.0,
             "passed": False,
@@ -153,13 +160,17 @@ def write_outputs(
         "original_prompt",
         "environment",
         "module",
+        "usefulness",
+        "quality",
+        "golden_readiness",
         "final_category",
         "confidence",
         "goal_achievement",
         "resolution",
         "tool_use_quality",
         "reasoning",
-        "human_category",
+        "human_quality",
+        "human_golden_readiness",
         "human_notes",
         "agreement",
     ]
@@ -170,13 +181,15 @@ def write_outputs(
             writer.writerow(
                 {
                     **{field: row.get(field, "") for field in review_fields},
-                    "human_category": "",
+                    "human_quality": "",
+                    "human_golden_readiness": "",
                     "human_notes": "",
                     "agreement": "",
                 }
             )
 
-    categories = Counter(str(row["final_category"]) for row in rows)
+    qualities = Counter(str(row.get("quality") or "unknown") for row in rows)
+    readiness = Counter(str(row.get("golden_readiness") or "unknown") for row in rows)
     modules = Counter(str(row.get("module") or "unknown") for row in rows)
     confidences = [float(row["confidence"]) for row in rows if row.get("confidence") is not None]
     summary = {
@@ -184,7 +197,10 @@ def write_outputs(
         "provider": provider,
         "model": model,
         "prompt_version": PROMPT_VERSION,
-        "category_counts": dict(sorted(categories.items())),
+        "quality_counts": dict(sorted(qualities.items())),
+        "golden_readiness_counts": dict(sorted(readiness.items())),
+        # Backward-compatible alias of quality_counts (agent quality only).
+        "category_counts": dict(sorted(qualities.items())),
         "module_counts": dict(sorted(modules.items())),
         "average_confidence": sum(confidences) / len(confidences) if confidences else None,
     }

@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""Export canonical production conversations as pre-captured EvalCase JSONL.
+"""Build offline review batches from canonical production conversations.
+
+This is **not** the live conversation eval. It packages fetched transcripts into
+JSONL batches for the offline quality judge (categorization only). Under the
+hood each eligible row is a harness-evals ``EvalCase`` so the judge runner can
+reuse SDK validation — the rows are judge input, not live goldens.
 
 The exporter never invokes the agent and never reads the Markdown review files.
 It reads one ``*.conversation.json`` per session, applies structural eligibility
 checks, validates eligible rows with ``EvalCase.from_dict()``, and writes:
 
-* ``<source>-<count>.jsonl`` — eligible EvalCases for the LLM judge
-* ``<source>-<count>.ineligible.jsonl`` — deterministic unusable cases
+* ``review-batches/<source>-<count>.jsonl`` — eligible rows for the LLM judge
+* ``review-batches/<source>-<count>.ineligible.jsonl`` — structurally unusable cases
 
 Usage:
-  python scripts/build_eval_dataset.py --source module-coverage --limit 5
-  python scripts/build_eval_dataset.py --source random --limit 10 --output /tmp/random-10.jsonl
+  python scripts/build_review_batches.py --source module-coverage --limit 5
+  python scripts/build_review_batches.py --source random --limit 10 --output /tmp/random-10.jsonl
 """
 
 from __future__ import annotations
@@ -96,7 +101,7 @@ def build_eval_case(conversation: dict[str, Any], canonical_path: Path) -> EvalC
 
 
 def default_output(source: str, limit: int) -> Path:
-    return DATASET_ROOT / "eval-datasets" / f"{source}-{limit:03d}.jsonl"
+    return DATASET_ROOT / "review-batches" / f"{source}-{limit:03d}.jsonl"
 
 
 def export_dataset(source: str, limit: int, output: Path) -> tuple[int, int]:
@@ -122,6 +127,7 @@ def export_dataset(source: str, limit: int, output: Path) -> tuple[int, int]:
                     "canonical_file": canonical_path.name,
                     "usefulness": "useless",
                     "quality": "not_applicable",
+                    "golden_readiness": "needs_rewrite",
                     "reasons": reasons,
                 }
             )
@@ -153,8 +159,8 @@ def main() -> int:
         parser.error("--limit must be at least 1")
     output = args.output or default_output(args.source, args.limit)
     eligible, ineligible = export_dataset(args.source, args.limit, output)
-    print(f"Wrote {eligible} eligible EvalCases to {output}")
-    print(f"Wrote {ineligible} ineligible cases to {output.with_suffix('.ineligible.jsonl')}")
+    print(f"Wrote {eligible} eligible review rows to {output}")
+    print(f"Wrote {ineligible} ineligible rows to {output.with_suffix('.ineligible.jsonl')}")
     return 0
 
 

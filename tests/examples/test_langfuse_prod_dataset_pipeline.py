@@ -23,8 +23,12 @@ sys.path.insert(0, str(REPO_ROOT))
 import build_agent_transcripts as transcript_builder  # noqa: E402
 import build_conversation_goldens as golden_builder  # noqa: E402
 from build_agent_transcripts import build_canonical_conversation  # noqa: E402
-from build_eval_dataset import build_eval_case, eligibility_reasons  # noqa: E402
-from conversation_quality import HarnessConversationQualityMetric, format_conversation  # noqa: E402
+from build_review_batches import build_eval_case, eligibility_reasons  # noqa: E402
+from conversation_quality import (  # noqa: E402
+    HarnessConversationQualityMetric,
+    format_conversation,
+    normalize_categories,
+)
 from examples.outcome_goal_metric import OutcomeGoalAccuracyMetric  # noqa: E402
 
 from harness_evals.conversation.golden import ConversationGolden, ConversationMode  # noqa: E402
@@ -45,6 +49,7 @@ class FakeJudgeLLM(BaseLLM):
         return {
             "usefulness": "useful",
             "quality": "good",
+            "golden_readiness": "ready",
             "goal_achievement": 0.9,
             "resolution": 0.8,
             "tool_use_quality": 0.7,
@@ -145,6 +150,26 @@ def test_structurally_empty_conversation_is_ineligible():
 
 
 @pytest.mark.unit
+def test_normalize_categories_keeps_quality_and_readiness_orthogonal():
+    usefulness, quality, readiness, final = normalize_categories(
+        "useful", "bad", "needs_rewrite"
+    )
+    assert usefulness == "useful"
+    assert quality == "bad"
+    assert readiness == "needs_rewrite"
+    assert final == "bad"
+
+
+@pytest.mark.unit
+def test_legacy_needs_improvement_review_maps_to_quality_and_readiness():
+    quality, readiness = golden_builder._resolve_review_labels(
+        {"final_category": "needs_improvement"}
+    )
+    assert quality == "good"
+    assert readiness == "needs_rewrite"
+
+
+@pytest.mark.unit
 def test_quality_metric_reads_complete_messages_and_tool_calls(tmp_path):
     canonical = build_canonical_conversation(
         {
@@ -167,6 +192,8 @@ def test_quality_metric_reads_complete_messages_and_tool_calls(tmp_path):
 
     assert score.metadata
     assert score.metadata["final_category"] == "good"
+    assert score.metadata["quality"] == "good"
+    assert score.metadata["golden_readiness"] == "ready"
     assert score.metadata["confidence"] == 0.85
     assert "Why did my pipeline fail?" in llm.prompt
     assert "ASSISTANT_TOOL_CALL:harness_diagnose" in llm.prompt

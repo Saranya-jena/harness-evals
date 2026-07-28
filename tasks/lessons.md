@@ -6,3 +6,6 @@
 - Conversation goldens must set `elicitation_hints.llm_on_miss: true`
   consistently. Deterministic matchers stabilize known questions, but unmatched
   wording must fall back to the simulator LLM instead of failing the eval flow.
+- Filter golden inventory candidates only by `golden_readiness=ready`, never by
+  agent `quality`. Quality and portability are orthogonal: `bad` or `unclear`
+  conversations can be ready negative/regression goldens.

@@ -8,7 +8,10 @@ remaining conversation environment-portable, classifies it, and emits
 
 Design decisions (see the plan doc):
 
-* Include ``good`` / ``bad`` / ``unclear`` judge categories. Exclude ``useless``.
+* Include agent-quality ``good`` / ``bad`` / ``unclear``. Exclude ``useless``.
+  Portability is a separate ``golden_readiness`` column (``ready`` /
+  ``needs_rewrite``); ``needs_rewrite`` can apply to good or bad.
+  Prefer promoting ``ready`` as-is; ``needs_rewrite`` usually needs curated overrides.
 * Exclude pipeline error-analysis conversations (they need a specific failed
   execution that does not exist in the eval environment).
 * Environment portability:
@@ -55,8 +58,47 @@ from harness_evals.conversation.golden import ConversationGolden  # noqa: E402
 DEFAULT_OVERRIDES = DATASET_ROOT / "conversation-golden-overrides.json"
 DEFAULT_OUTPUT = REPO_ROOT / "examples" / "prod-conversation.goldens.jsonl"
 
+# Agent-quality categories we keep. Portability is tracked separately.
+INCLUDED_QUALITIES = {"good", "bad", "unclear"}
+# Legacy single-label values from conversation-quality-v2 review CSVs.
+_LEGACY_INCLUDED = {"needs_improvement"}
+EXCLUDED_LABELS = {"useless", "not_applicable"}
+READINESS_VALUES = {"ready", "needs_rewrite"}
+
+
+def _resolve_review_labels(review_row: dict[str, str]) -> tuple[str, str]:
+    """Return (quality, golden_readiness) from a review/results row.
+
+    Supports v3 separate columns and v2 ``final_category=needs_improvement``.
+    Human overrides win when present. Readiness is only ``ready`` or ``needs_rewrite``.
+    """
+    quality = (
+        review_row.get("human_quality")
+        or review_row.get("quality")
+        or review_row.get("human_category")
+        or review_row.get("final_category")
+        or ""
+    ).strip().lower()
+    readiness = (
+        review_row.get("human_golden_readiness")
+        or review_row.get("golden_readiness")
+        or ""
+    ).strip().lower()
+
+    if quality == "needs_improvement":
+        # v2 conflated agent quality + portability into one label.
+        quality = "good"
+        readiness = readiness or "needs_rewrite"
+    if readiness == "unsuitable" or readiness == "not_applicable":
+        # Retired readiness labels — treat as rewrite candidates.
+        readiness = "needs_rewrite"
+    if readiness not in READINESS_VALUES:
+        readiness = "needs_rewrite"
+    return quality, readiness
+
+
 # Judge categories we keep. "useless" is dropped; anything else unknown is dropped.
-INCLUDED_CATEGORIES = {"good", "bad", "unclear"}
+INCLUDED_CATEGORIES = INCLUDED_QUALITIES | _LEGACY_INCLUDED
 
 # Review-gate / elicitation injections: synthetic user messages the platform
 # feeds back into the loop (approvals and form-value continuations). These are
@@ -111,7 +153,7 @@ _SECRET_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 ]
 # URLs that are allowed to survive (documentation / schema references only).
 _ALLOWED_URL_RE = re.compile(
-    r"^https?://(developer\.harness\.io|github\.com|docs\.)", re.IGNORECASE
+    r"^https?://(developer\.harness\.io|github\.com|docs\.|backstage\.io)", re.IGNORECASE
 )
 
 MAX_USER_TURNS = 6
@@ -129,6 +171,7 @@ class ManifestRecord:
     reason: str
     scenario_type: str | None = None
     golden_id: str | None = None
+    golden_readiness: str | None = None
     warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -395,9 +438,7 @@ def build_golden(
     environment = metadata.get("environment")
     org = metadata.get("org_id")
     project = metadata.get("project_id")
-    judge_category = (review_row.get("final_category") or review_row.get("human_category") or "").strip()
-    if not judge_category:
-        judge_category = (review_row.get("quality") or review_row.get("usefulness") or "").strip()
+    judge_category, golden_readiness = _resolve_review_labels(review_row)
     reasoning = review_row.get("reasoning") or ""
     source_file = metadata.get("transcript_file") or cid
 
@@ -408,16 +449,17 @@ def build_golden(
             module=module,
             environment=environment,
             judge_category=judge_category or None,
+            golden_readiness=golden_readiness or None,
             decision=decision,
             action=action,
             reason=reason,
             **extra,
         )
 
-    # 1. Category filter.
-    category = judge_category.lower()
-    if category and category not in INCLUDED_CATEGORIES and category in {"useless", "not_applicable"}:
-        return None, manifest("excluded", "excluded", f"judge_category={category}")
+    # 1. Category filter (agent quality). Portability is separate.
+    category = judge_category
+    if category in EXCLUDED_LABELS or (category and category not in INCLUDED_CATEGORIES):
+        return None, manifest("excluded", "excluded", f"judge_category={category or 'missing'}")
 
     # 2. Explicit curated override (may force-include or force-exclude).
     if override is not None:
@@ -460,6 +502,7 @@ def build_golden(
         module=module,
         environment=environment,
         judge_category=judge_category,
+        golden_readiness=golden_readiness,
         scenario=scenario,
         expected_outcome=expected_outcome,
         turns=turns,
@@ -485,6 +528,7 @@ def _assemble_golden(
     module: str | None,
     environment: str | None,
     judge_category: str,
+    golden_readiness: str,
     scenario: str,
     expected_outcome: str,
     turns: list[str],
@@ -513,6 +557,7 @@ def _assemble_golden(
             "module": str(module or "unknown"),
             "environment": str(environment or "unknown"),
             "judge_category": judge_category or "unknown",
+            "golden_readiness": golden_readiness or "unknown",
             "scenario_type": scenario_type,
         },
     }
@@ -532,7 +577,7 @@ def _golden_from_override(
     cid = conversation.get("conversation_id") or ""
     module = metadata.get("module")
     environment = metadata.get("environment")
-    judge_category = (review_row.get("final_category") or "").strip()
+    judge_category, golden_readiness = _resolve_review_labels(review_row)
     scenario_type = override.get("scenario_type") or scenario_type_of(conversation)
     turns = override.get("turns") or [override.get("initial_prompt", "")]
     golden = _assemble_golden(
@@ -540,6 +585,7 @@ def _golden_from_override(
         module=module,
         environment=environment,
         judge_category=judge_category,
+        golden_readiness=golden_readiness,
         scenario=override["scenario"],
         expected_outcome=override["expected_outcome"],
         turns=turns,
