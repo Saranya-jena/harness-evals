@@ -89,21 +89,19 @@ def classify_span(span: dict[str, Any]) -> SpanType:
 
     if "gen_ai.tool.name" in attrs or "tool.name" in attrs:
         return SpanType.TOOL_CALL
-    # mcp.* spans are transport-layer (HTTP calls under execute_tool) — skip them
+    # Nested transport spans (e.g. MCP client HTTP under a tool call) — skip.
     if name.startswith("mcp."):
         return SpanType.OTHER
     if name.startswith("execute_tool") or ("tool" in name and "gen_ai" not in name):
         return SpanType.TOOL_CALL
 
-    # Langfuse-instrumented agent run spans
+    # Langfuse observation-type hints (agent / generation / tool:* naming).
     if attrs.get("langfuse.observation.type") == "agent":
         return SpanType.AGENT_ROOT
 
-    # Langfuse-instrumented LLM turn spans (e.g. "llm_turn_N")
     if attrs.get("langfuse.observation.type") == "generation":
         return SpanType.LLM_TURN
 
-    # Langfuse-instrumented tool spans (e.g. "tool:Read", "tool:Skill")
     if (
         attrs.get("langfuse.observation.type") == "span"
         and "gen_ai.tool.name" not in attrs
@@ -529,8 +527,7 @@ def _build_conversation_eval_case(spans: list[dict[str, Any]]) -> EvalCase:
             attrs = span.get("attributes") or {}
             text = _text_from_langfuse_io(
                 attrs.get("langfuse.trace.input"),
-                # Prefer short `prompt` (the user question) over full `user_message`
-                # which may include injected context blobs.
+                # Prefer short `prompt` over fuller `user_message` wrappers.
                 keys=("prompt", "user_message", "text", "input"),
             )
             if text:
@@ -575,11 +572,11 @@ def _build_conversation_eval_case(spans: list[dict[str, Any]]) -> EvalCase:
 def _extract_user_input_from_span(attrs: dict) -> str:
     """Extract the user's text input from span attributes.
 
-    Prefer Langfuse *trace*-level input (the real user prompt) over generation
-    ``input_messages``, which often end with injected ``<system-reminder>`` /
-    skill blobs that are role=user but are not the session prompt.
+    Prefer Langfuse *trace*-level input (the session prompt) over generation
+    ``input_messages``, which may end with injected role=user context that is
+    not the original user question.
     """
-    # Langfuse trace I/O: {user_message|prompt|...} shapes used by some exporters.
+    # Langfuse trace I/O: common dict shapes ({prompt}, {user_message}, …).
     for key in ("langfuse.trace.input", "langfuse.observation.input"):
         raw = attrs.get(key)
         if not raw:
@@ -598,7 +595,7 @@ def _extract_user_input_from_span(attrs: dict) -> str:
         parsed = raw if isinstance(raw, list) else _try_json(raw)
         if not isinstance(parsed, list):
             continue
-        # Walk in reverse to find the last *real* user message (skip skill injections).
+        # Walk in reverse to find the last real user message (skip injections).
         for msg in reversed(parsed):
             if not isinstance(msg, dict) or msg.get("role") != "user":
                 continue
@@ -643,7 +640,7 @@ def _text_from_langfuse_io(raw: object, *, keys: tuple[str, ...]) -> str:
 
 
 def _looks_like_injected_user_context(text: str) -> bool:
-    """True for Claude Agent SDK skill / system-reminder blobs role=user."""
+    """True for common role=user injections that are not the session prompt."""
     head = text.lstrip()[:80].lower()
     return head.startswith("<system-reminder>") or head.startswith("base directory for this skill:")
 

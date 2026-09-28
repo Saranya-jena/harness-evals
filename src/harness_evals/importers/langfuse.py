@@ -533,7 +533,7 @@ def _trace_session_id(trace: object) -> str | None:
 
 
 def _list_trace_metadata(trace: object) -> dict[str, object]:
-    """Capture list-API fields needed for module/env stratified sampling."""
+    """Capture list-API fields useful for sampling before span hydration."""
     meta: dict[str, object] = {}
     tags = getattr(trace, "tags", None)
     if tags is not None:
@@ -585,8 +585,8 @@ def _observation_to_span(obs: object, *, trace_id: str, session_id: str | None) 
                 attrs["gen_ai.output_messages"] = [{"role": "assistant", "content": obs_output}]
     elif obs_type == "tool" or (isinstance(name, str) and name.lower().startswith("tool:")):
         # Only real tool observations — do NOT map generic Langfuse SPAN here.
-        # Some agent traces emit many SPAN events (mcp/rest/provider_call); treating
-        # them as execute_tool drops AGENT/GENERATION recovery of langfuse.trace.input.
+        # Transport/client SPANs misclassified as execute_tool hide agent/generation
+        # recovery of langfuse.trace.input.
         attrs["gen_ai.operation.name"] = "execute_tool"
         tool_name = name[5:] if isinstance(name, str) and name.lower().startswith("tool:") else name
         attrs["gen_ai.tool.name"] = tool_name
@@ -599,8 +599,8 @@ def _observation_to_span(obs: object, *, trace_id: str, session_id: str | None) 
     elif obs_type == "agent":
         attrs["langfuse.observation.type"] = "agent"
         attrs["gen_ai.operation.name"] = "invoke_agent"
-        # Agent I/O is often {prompt, user_message} — keep on langfuse keys so
-        # _extract_user_input_from_span can read it; do not force input_messages.
+        # Keep dict I/O on langfuse keys so _extract_user_input_from_span can read
+        # {prompt}/{user_message} shapes; do not force input_messages.
         if obs_input is not None:
             if isinstance(obs_input, list):
                 attrs["gen_ai.input_messages"] = obs_input

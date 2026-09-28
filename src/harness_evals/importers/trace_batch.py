@@ -30,8 +30,8 @@ class SpanTrace:
     trace_id: str | None = None
     session_id: str | None = None
     start_time: datetime | None = None
-    # Optional discovery metadata (module/env/tags/prompt) from the list API —
-    # used for stratified sampling before span hydration.
+    # Optional discovery metadata (tags/environment/prompt/…) from the list API —
+    # useful for sampling before span hydration.
     metadata: dict[str, Any] | None = None
 
 

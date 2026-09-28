@@ -449,7 +449,7 @@ class TestLangfuseTraceCatalog:
                 data=[
                     _FakeObservation(
                         type="GENERATION",
-                        name="litellm_request",
+                        name="chat.completion",
                         input=None,
                         output=None,
                         start_time=datetime(2026, 9, 20, 1, 0 if trace_id == "t1" else 1, tzinfo=timezone.utc),
@@ -475,28 +475,28 @@ class TestLangfuseTraceCatalog:
         assert cases[0].output == "final answer"
 
     def test_generic_span_observations_are_not_tools(self):
-        """Langfuse SPAN (mcp/rest) must not be mapped to execute_tool."""
-        from harness_evals.importers.langfuse import LangfuseTraceCatalog, _observation_to_span
+        """Langfuse SPAN transport events must not be mapped to execute_tool."""
+        from harness_evals.importers.langfuse import LangfuseTraceCatalog
 
         client = MagicMock()
         client.api.trace.get.return_value = _FakeTrace(
             session_id="sess-c",
-            input={"prompt": "Analyze the error", "user_message": "<current_context>\nAnalyze"},
+            input={"prompt": "Analyze the error", "user_message": "<extra_context>\nAnalyze"},
             output={"status": "completed", "text": "## Analysis"},
         )
         client.api.observations.get_many.return_value = _FakeObservationList(
             data=[
                 _FakeObservation(
                     type="SPAN",
-                    name="rest.request",
+                    name="http.request",
                     input={"method": "GET"},
                     output={"status": 200},
                     parent_observation_id="agent-1",
                 ),
                 _FakeObservation(
                     type="TOOL",
-                    name="list_resources",
-                    input={"resource_type": "pipeline"},
+                    name="search_docs",
+                    input={"query": "timeouts"},
                     output={"items": []},
                     parent_observation_id="agent-1",
                 ),
@@ -512,8 +512,8 @@ class TestLangfuseTraceCatalog:
         catalog = LangfuseTraceCatalog(client)
         spans = catalog.load_spans("t-span")
         by_name = {s["name"]: s["attributes"] for s in spans}
-        assert by_name["rest.request"].get("gen_ai.operation.name") != "execute_tool"
-        assert by_name["list_resources"].get("gen_ai.operation.name") == "execute_tool"
+        assert by_name["http.request"].get("gen_ai.operation.name") != "execute_tool"
+        assert by_name["search_docs"].get("gen_ai.operation.name") == "execute_tool"
         assert by_name["chat_agent"].get("gen_ai.operation.name") == "invoke_agent"
 
         from harness_evals.importers.otel import OTELEvalCaseSource

@@ -573,7 +573,6 @@ Time-window listing and session merge are generic (`lookback_days`,
 implementation:
 
 ```python
-from datetime import datetime, timezone, timedelta
 from harness_evals.importers.langfuse import LangfuseTraceCatalog
 from harness_evals.importers.otel import OTELEvalCaseSource
 from harness_evals.refs import ResourceRef

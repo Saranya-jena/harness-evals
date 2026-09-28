@@ -665,21 +665,21 @@ class TestLangfuseTraceIoRecovery:
 
         spans = [
             {
-                "name": "rest.request",
+                "name": "http.request",
                 "span_id": "1",
                 "trace_id": "t1",
                 "parent_span_id": "root",
                 "attributes": {
                     "gen_ai.operation.name": "execute_tool",
-                    "gen_ai.tool.name": "rest.request",
+                    "gen_ai.tool.name": "http.request",
                     "gen_ai.tool.call.result": '{"ok": true}',
                     "langfuse.trace.input": {
-                        "prompt": "Analyze the error for the pipeline execution",
-                        "user_message": "<current_context>\nAnalyze the error",
+                        "prompt": "Summarize the failed job logs",
+                        "user_message": "<extra_context>\nSummarize the failed job logs",
                     },
                     "langfuse.trace.output": {
                         "status": "completed",
-                        "text": "## Analysis: Missing Terraform Variable",
+                        "text": "## Summary: Missing configuration key",
                     },
                 },
                 "start_time_unix_nano": 1,
@@ -687,15 +687,15 @@ class TestLangfuseTraceIoRecovery:
             }
         ]
         ec = _build_conversation_eval_case(spans)
-        assert ec.input == "Analyze the error for the pipeline execution"
-        assert ec.output == "## Analysis: Missing Terraform Variable"
+        assert ec.input == "Summarize the failed job logs"
+        assert ec.output == "## Summary: Missing configuration key"
 
     def test_prefers_trace_prompt_over_system_reminder_input_messages(self):
         from harness_evals.importers.otel import _build_conversation_eval_case
 
         spans = [
             {
-                "name": "litellm_request",
+                "name": "chat.completion",
                 "span_id": "2",
                 "trace_id": "t2",
                 "parent_span_id": None,
@@ -710,7 +710,7 @@ class TestLangfuseTraceIoRecovery:
                     "gen_ai.output_messages": [{"role": "assistant", "content": "done"}],
                     "langfuse.trace.input": {
                         "prompt": "Ask a support question",
-                        "user_message": "<current_context>\nAsk a support question",
+                        "user_message": "<extra_context>\nAsk a support question",
                     },
                 },
                 "start_time_unix_nano": 1,

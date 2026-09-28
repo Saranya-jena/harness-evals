@@ -476,12 +476,12 @@ class TestCsvSink:
 
     def test_conversation_pivot_writes_one_row_per_case(self, tmp_path):
         path = tmp_path / "conversation.csv"
-        sink = CsvSink(str(path), format="conversation_pivot", label="grok")
+        sink = CsvSink(str(path), format="conversation_pivot", label="judge-a")
         ec = EvalCase(
             input="List unique component names",
             output="done",
             metadata={
-                "golden_id": "case-discover-components",
+                "golden_id": "case-list-components",
                 "scenario": "List unique component names across repositories",
             },
         )
@@ -507,36 +507,36 @@ class TestCsvSink:
         with open(path, newline="", encoding="utf-8") as f:
             rows = list(csv.DictReader(f))
         assert len(rows) == 1
-        assert rows[0]["golden_id"] == "case-discover-components"
+        assert rows[0]["golden_id"] == "case-list-components"
         assert rows[0]["scenario"] == "List unique component names across repositories"
-        assert rows[0]["hallucination"] == "grok: 1"
-        assert rows[0]["conversation_resolution"] == "grok: 0.95"
-        assert rows[0]["total_duration_ms"] == "grok: 45210"
-        assert rows[0]["total_cost_usd"] == "grok: 0.12"
-        assert rows[0]["total_tool_calls"] == "grok: 17"
-        assert rows[0]["total_turns"] == "grok: 3"
+        assert rows[0]["hallucination"] == "judge-a: 1"
+        assert rows[0]["conversation_resolution"] == "judge-a: 0.95"
+        assert rows[0]["total_duration_ms"] == "judge-a: 45210"
+        assert rows[0]["total_cost_usd"] == "judge-a: 0.12"
+        assert rows[0]["total_tool_calls"] == "judge-a: 17"
+        assert rows[0]["total_turns"] == "judge-a: 3"
 
-    def test_conversation_pivot_write_metrics(self, tmp_path):
-        path = tmp_path / "write_pivot.csv"
+    def test_conversation_pivot_custom_metrics(self, tmp_path):
+        path = tmp_path / "custom_pivot.csv"
         sink = CsvSink(
             str(path),
             format="conversation_pivot",
-            label="sonnet-5-medium",
+            label="judge-b",
             pivot_metrics=[
                 "goal_accuracy",
-                "plugin_hallucination",
-                "plugin_role_violation",
+                "custom_hallucination",
+                "custom_role_violation",
             ],
         )
         ec = EvalCase(
-            input="Create a cost category",
+            input="Create a billing label",
             output="done",
-            metadata={"golden_id": "case-write-category", "scenario": "Create category"},
+            metadata={"golden_id": "case-write-label", "scenario": "Create label"},
         )
         scores = [
             Score(name="goal_accuracy", value=0.5, threshold=0.7),
-            Score(name="plugin_hallucination", value=1.0, threshold=0.7),
-            Score(name="plugin_role_violation", value=1.0, threshold=0.9),
+            Score(name="custom_hallucination", value=1.0, threshold=0.7),
+            Score(name="custom_role_violation", value=1.0, threshold=0.9),
         ]
         sink.write(scores, ec)
         sink.finalize()
@@ -544,18 +544,18 @@ class TestCsvSink:
         with open(path, newline="", encoding="utf-8") as f:
             row = next(csv.DictReader(f))
         assert "hallucination" not in row
-        assert row["plugin_hallucination"] == "sonnet-5-medium: 1"
-        assert row["plugin_role_violation"] == "sonnet-5-medium: 1"
+        assert row["custom_hallucination"] == "judge-b: 1"
+        assert row["custom_role_violation"] == "judge-b: 1"
 
     def test_conversation_pivot_target_error_shows_question_marks(self, tmp_path):
         path = tmp_path / "conversation_failed.csv"
-        sink = CsvSink(str(path), format="conversation_pivot", label="sonnet-5-medium")
+        sink = CsvSink(str(path), format="conversation_pivot", label="judge-b")
         ec = EvalCase(
-            input="Trace deployment changes",
+            input="Explain the latest release notes",
             output="",
             metadata={
-                "golden_id": "case-deploy-trace",
-                "scenario": "Trace what changed in the most recent deployment",
+                "golden_id": "case-release-notes",
+                "scenario": "Summarize the latest release notes",
                 "simulate_error": "401 Unauthorized",
             },
         )
@@ -573,11 +573,11 @@ class TestCsvSink:
 
         with open(path, newline="", encoding="utf-8") as f:
             row = next(csv.DictReader(f))
-        assert row["conversation_resolution"] == "sonnet-5-medium: ?"
-        assert row["hallucination"] == "sonnet-5-medium: ?"
-        assert row["total_duration_ms"] == "sonnet-5-medium: ?"
-        assert row["total_cost_usd"] == "sonnet-5-medium: ?"
-        assert row["total_tool_calls"] == "sonnet-5-medium: ?"
+        assert row["conversation_resolution"] == "judge-b: ?"
+        assert row["hallucination"] == "judge-b: ?"
+        assert row["total_duration_ms"] == "judge-b: ?"
+        assert row["total_cost_usd"] == "judge-b: ?"
+        assert row["total_tool_calls"] == "judge-b: ?"
 
 
 # ---------------------------------------------------------------------------
