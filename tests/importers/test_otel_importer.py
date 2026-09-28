@@ -536,6 +536,24 @@ class TestOTELSessionGrouping:
         assert cases[0].metadata["session_id"] == "sess-1"
         assert cases[0].metadata["trace_ids"] == ["t1", "t2"]
 
+    def test_session_merge_sums_per_trace_total_cost(self):
+        """Trace-level cost stamps (one per source trace) must sum on merge."""
+        from harness_evals.importers.trace_batch import SpanTrace
+
+        t1 = _chat_spans("first", "ack", session="sess-1", trace_id="t1", start_nano=1_000_000_000)
+        t2 = _chat_spans("second", "done", session="sess-1", trace_id="t2", start_nano=3_000_000_000)
+        # Mirror Langfuse load_spans: stamp total_cost once on the first span
+        # of each trace (no gen_ai.usage.cost → fallback path).
+        t1[0]["attributes"]["langfuse.trace.total_cost"] = 0.01
+        t2[0]["attributes"]["langfuse.trace.total_cost"] = 0.02
+        traces = [
+            SpanTrace(spans=t1, trace_id="t1", session_id="sess-1"),
+            SpanTrace(spans=t2, trace_id="t2", session_id="sess-1"),
+        ]
+        cases = OTELEvalCaseSource.from_span_traces(traces, group_by="session_id")
+        assert len(cases) == 1
+        assert cases[0].cost_usd == pytest.approx(0.03)
+
     def test_missing_session_id_stays_one_case_per_trace(self):
         from harness_evals.importers.trace_batch import SpanTrace
 

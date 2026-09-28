@@ -488,11 +488,15 @@ def _build_conversation_eval_case(spans: list[dict[str, Any]]) -> EvalCase:
 
     latency_ms = _compute_trace_latency(sorted_spans)
 
-    # Prefer summing observation-level costs; fall back to a single trace total.
+    # Prefer summing observation-level costs. Fall back to summing stamped
+    # per-trace totals: Langfuse stamps ``langfuse.trace.total_cost`` once per
+    # source trace (first span). Session merges concatenate spans from many
+    # traces, so taking only the first stamp undercounts the session.
     cost_usd: float | None = None
     obs_cost_total = 0.0
     saw_obs_cost = False
-    trace_cost: float | None = None
+    trace_cost_total = 0.0
+    saw_trace_cost = False
     for span in sorted_spans:
         attrs = span.get("attributes") or {}
         raw_obs = attrs.get("gen_ai.usage.cost")
@@ -501,13 +505,14 @@ def _build_conversation_eval_case(spans: list[dict[str, Any]]) -> EvalCase:
                 obs_cost_total += float(raw_obs)
                 saw_obs_cost = True
         raw_trace = attrs.get("langfuse.trace.total_cost")
-        if raw_trace is not None and trace_cost is None:
+        if raw_trace is not None:
             with contextlib.suppress(TypeError, ValueError):
-                trace_cost = float(raw_trace)
+                trace_cost_total += float(raw_trace)
+                saw_trace_cost = True
     if saw_obs_cost and obs_cost_total > 0:
         cost_usd = obs_cost_total
-    elif trace_cost is not None and trace_cost > 0:
-        cost_usd = trace_cost
+    elif saw_trace_cost and trace_cost_total > 0:
+        cost_usd = trace_cost_total
     else:
         raw_cost = meta_attrs.get("gen_ai.usage.cost")
         if raw_cost is not None:
