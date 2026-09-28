@@ -5,6 +5,16 @@ All notable changes to harness-evals will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.2]
+
+### Fixed
+
+- **Langfuse self-hosted observations hydrate**: SDK 4+ maps
+  `api.observations.get_many` to Cloud-only `/api/public/v2/observations`.
+  The importer now falls back to `api.legacy.observations_v1` (or embedded
+  `trace.observations`) on that 404, pins `langfuse>=2.0,<4`, and paginates
+  v1 observation pages.
+
 ## [0.24.1]
 
 ### Added
