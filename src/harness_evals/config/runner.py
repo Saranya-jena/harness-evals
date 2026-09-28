@@ -60,7 +60,6 @@ _LLM_PROVIDERS: dict[str, str] = {
     "harness_llm_gateway": "harness_evals.llm.harness_gateway.HarnessGatewayOpenAILLM",
     "bedrock_anthropic": "harness_evals.llm.bedrock.BedrockAnthropicLLM",
     "bedrock_openai": "harness_evals.llm.bedrock.BedrockOpenAILLM",
-    "bedrock_converse": "harness_evals.llm.bedrock.BedrockConverseLLM",
 }
 
 logger = logging.getLogger(__name__)
