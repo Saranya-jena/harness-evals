@@ -5,6 +5,29 @@ All notable changes to harness-evals will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.1]
+
+### Added
+
+- **Production-trace conversation eval path**: `TraceCatalog` /
+  `LangfuseTraceCatalog`, OTEL `lookback_days` + `group_by=session_id` session
+  merge, and conversation-pivot CSV duration/cost/tool totals from generic
+  score ``metadata.observed`` usage telemetry.
+
+### Fixed
+
+- **`evaluate()` judge spend**: sync path records token/cost metadata (parity with
+  `a_evaluate()`).
+- **Langfuse → OTEL**: stamp observation cost/tokens and trace I/O onto spans;
+  keep fuller tool results for downstream grounding.
+- **Session-merge cost**: when falling back to a per-trace total stamped once
+  per source trace, sum those stamps across a merged session instead of
+  keeping only the first. When both agent-root and child spans carry
+  per-span usage cost, prefer children so a rolled-up root total is not
+  double-counted.
+- **Dependency CVEs**: bump locked `anyio` (≥4.14.2), `httpx2` / `httpcore2`
+  (≥2.12.0 / ≥2.10.0) for CVE-2026-63374 / CVE-2026-84381 / CVE-2026-84382.
+
 ## [0.24.0]
 
 ### Added
