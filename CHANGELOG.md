@@ -20,9 +20,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `a_evaluate()`).
 - **Langfuse → OTEL**: stamp observation cost/tokens and trace I/O onto spans;
   keep fuller tool results for downstream grounding.
-- **Session-merge cost**: when falling back to ``langfuse.trace.total_cost``,
-  sum stamps across concatenated traces instead of keeping only the first
-  (observation-level ``gen_ai.usage.cost`` summing was already correct).
+- **Session-merge cost**: when falling back to a per-trace total stamped once
+  per source trace, sum those stamps across a merged session instead of
+  keeping only the first.
 - **Dependency CVEs**: bump locked `anyio` (≥4.14.2), `httpx2` / `httpcore2`
   (≥2.12.0 / ≥2.10.0) for CVE-2026-63374 / CVE-2026-84381 / CVE-2026-84382.
 

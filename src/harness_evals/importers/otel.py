@@ -486,10 +486,9 @@ def _build_conversation_eval_case(spans: list[dict[str, Any]]) -> EvalCase:
 
     latency_ms = _compute_trace_latency(sorted_spans)
 
-    # Prefer summing observation-level costs. Fall back to summing stamped
-    # per-trace totals: Langfuse stamps ``langfuse.trace.total_cost`` once per
-    # source trace (first span). Session merges concatenate spans from many
-    # traces, so taking only the first stamp undercounts the session.
+    # Prefer summed per-span usage cost. Otherwise sum per-trace totals, which
+    # are stamped once per source trace. A session merge concatenates several
+    # traces, so keeping only the first stamp undercounts the session.
     cost_usd: float | None = None
     obs_cost_total = 0.0
     saw_obs_cost = False
