@@ -554,6 +554,88 @@ class TestOTELSessionGrouping:
         assert len(cases) == 1
         assert cases[0].cost_usd == pytest.approx(0.03)
 
+    def test_prefers_child_usage_cost_over_rolled_up_root(self):
+        """Skip agent-root usage cost when child spans also carry cost."""
+        from harness_evals.importers.otel import _build_conversation_eval_case
+
+        spans = [
+            {
+                "name": "agent",
+                "span_id": "root",
+                "trace_id": "t1",
+                "parent_span_id": None,
+                "attributes": {
+                    "gen_ai.operation.name": "invoke_agent",
+                    "langfuse.observation.type": "agent",
+                    "gen_ai.usage.cost": 0.03,
+                    "gen_ai.input_messages": json.dumps(
+                        [{"role": "user", "parts": [{"type": "text", "content": "hi"}]}]
+                    ),
+                },
+                "start_time_unix_nano": 1,
+                "end_time_unix_nano": 4,
+            },
+            {
+                "name": "llm_turn_1",
+                "span_id": "llm1",
+                "trace_id": "t1",
+                "parent_span_id": "root",
+                "attributes": {
+                    "langfuse.observation.type": "generation",
+                    "gen_ai.usage.cost": 0.01,
+                    "gen_ai.output_messages": json.dumps(
+                        [{"role": "assistant", "parts": [{"type": "text", "content": "a"}]}]
+                    ),
+                },
+                "start_time_unix_nano": 2,
+                "end_time_unix_nano": 3,
+            },
+            {
+                "name": "llm_turn_2",
+                "span_id": "llm2",
+                "trace_id": "t1",
+                "parent_span_id": "root",
+                "attributes": {
+                    "langfuse.observation.type": "generation",
+                    "gen_ai.usage.cost": 0.02,
+                    "gen_ai.output_messages": json.dumps(
+                        [{"role": "assistant", "parts": [{"type": "text", "content": "b"}]}]
+                    ),
+                },
+                "start_time_unix_nano": 3,
+                "end_time_unix_nano": 4,
+            },
+        ]
+        ec = _build_conversation_eval_case(spans)
+        assert ec.cost_usd == pytest.approx(0.03)
+
+    def test_root_only_usage_cost_is_kept(self):
+        from harness_evals.importers.otel import _build_conversation_eval_case
+
+        spans = [
+            {
+                "name": "agent",
+                "span_id": "root",
+                "trace_id": "t1",
+                "parent_span_id": None,
+                "attributes": {
+                    "gen_ai.operation.name": "invoke_agent",
+                    "langfuse.observation.type": "agent",
+                    "gen_ai.usage.cost": 0.05,
+                    "gen_ai.input_messages": json.dumps(
+                        [{"role": "user", "parts": [{"type": "text", "content": "hi"}]}]
+                    ),
+                    "gen_ai.output_messages": json.dumps(
+                        [{"role": "assistant", "parts": [{"type": "text", "content": "ok"}]}]
+                    ),
+                },
+                "start_time_unix_nano": 1,
+                "end_time_unix_nano": 2,
+            }
+        ]
+        ec = _build_conversation_eval_case(spans)
+        assert ec.cost_usd == pytest.approx(0.05)
+
     def test_missing_session_id_stays_one_case_per_trace(self):
         from harness_evals.importers.trace_batch import SpanTrace
 

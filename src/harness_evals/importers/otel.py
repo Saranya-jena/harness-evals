@@ -486,12 +486,15 @@ def _build_conversation_eval_case(spans: list[dict[str, Any]]) -> EvalCase:
 
     latency_ms = _compute_trace_latency(sorted_spans)
 
-    # Prefer summed per-span usage cost. Otherwise sum per-trace totals, which
-    # are stamped once per source trace. A session merge concatenates several
-    # traces, so keeping only the first stamp undercounts the session.
+    # Prefer per-span usage cost. When both agent-root and child spans carry
+    # cost, keep children only (roots may stamp a rolled-up total). Otherwise
+    # fall back to per-trace totals stamped once per source trace — session
+    # merges concatenate traces, so summing those stamps is required.
     cost_usd: float | None = None
-    obs_cost_total = 0.0
-    saw_obs_cost = False
+    child_cost_total = 0.0
+    root_cost_total = 0.0
+    saw_child_cost = False
+    saw_root_cost = False
     trace_cost_total = 0.0
     saw_trace_cost = False
     for span in sorted_spans:
@@ -499,15 +502,22 @@ def _build_conversation_eval_case(spans: list[dict[str, Any]]) -> EvalCase:
         raw_obs = attrs.get("gen_ai.usage.cost")
         if raw_obs is not None:
             with contextlib.suppress(TypeError, ValueError):
-                obs_cost_total += float(raw_obs)
-                saw_obs_cost = True
+                value = float(raw_obs)
+                if classify_span(span) == SpanType.AGENT_ROOT:
+                    root_cost_total += value
+                    saw_root_cost = True
+                else:
+                    child_cost_total += value
+                    saw_child_cost = True
         raw_trace = attrs.get("langfuse.trace.total_cost")
         if raw_trace is not None:
             with contextlib.suppress(TypeError, ValueError):
                 trace_cost_total += float(raw_trace)
                 saw_trace_cost = True
-    if saw_obs_cost and obs_cost_total > 0:
-        cost_usd = obs_cost_total
+    if saw_child_cost and child_cost_total > 0:
+        cost_usd = child_cost_total
+    elif saw_root_cost and root_cost_total > 0:
+        cost_usd = root_cost_total
     elif saw_trace_cost and trace_cost_total > 0:
         cost_usd = trace_cost_total
     else:

@@ -22,7 +22,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   keep fuller tool results for downstream grounding.
 - **Session-merge cost**: when falling back to a per-trace total stamped once
   per source trace, sum those stamps across a merged session instead of
-  keeping only the first.
+  keeping only the first. When both agent-root and child spans carry
+  per-span usage cost, prefer children so a rolled-up root total is not
+  double-counted.
 - **Dependency CVEs**: bump locked `anyio` (≥4.14.2), `httpx2` / `httpcore2`
   (≥2.12.0 / ≥2.10.0) for CVE-2026-63374 / CVE-2026-84381 / CVE-2026-84382.
 
