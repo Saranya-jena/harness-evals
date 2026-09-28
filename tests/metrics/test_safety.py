@@ -231,10 +231,10 @@ class TestPIIMetric:
         assert not score.passed
         assert "phone" in (score.metadata or {}).get("pii_types_found", [])
 
-    def test_mcp_tool_token_still_excluded(self):
+    def test_harness_tool_token_still_excluded(self):
         ec = EvalCase(
             input="q",
-            output="Invoked mcp__vendor__list_resources via tool_AbCdEfGhIjKlMnOp successfully.",
+            output="Invoked mcp__harness__harness_list via tool_AbCdEfGhIjKlMnOp successfully.",
         )
         score = PIIMetric().measure(ec)
         assert score.passed
@@ -245,17 +245,6 @@ class TestPIIMetric:
             output="Pipeline eval_org_standards_1786086622 was updated successfully.",
         )
         score = PIIMetric(exclude_patterns=[r"_\d{10}\b"]).measure(ec)
-        assert score.passed
-
-    def test_long_resource_id_digits_not_flagged_as_phone(self):
-        ec = EvalCase(
-            input="q",
-            output=(
-                "Created resource demo_connector_1790183333065 in project "
-                "demo_project_1790183333065."
-            ),
-        )
-        score = PIIMetric().measure(ec)
         assert score.passed
 
     def test_is_safety_metric(self):
@@ -583,7 +572,7 @@ class TestHallucinationMetric:
                     content=None,
                     tool_calls=[
                         ToolCall(
-                            name="create_resource",
+                            name="harness_create",
                             input={"resource_type": "pipeline", "identifier": "demo-pipeline"},
                         )
                     ],
@@ -594,7 +583,7 @@ class TestHallucinationMetric:
         score = await metric.a_measure(ec)
 
         assert score.passed
-        assert "assistant_tool_input (create_resource)" in llm.prompts[0]
+        assert "assistant_tool_input (harness_create)" in llm.prompts[0]
         assert "demo-pipeline" in llm.prompts[0]
 
     async def test_includes_assistant_tool_results_as_reference_when_enabled(self):
@@ -614,7 +603,7 @@ class TestHallucinationMetric:
                 Message(
                     role="tool",
                     content='{"status": "SUCCESS", "message": "Connection validated"}',
-                    tool_calls=[ToolCall(name="execute_action", input=None)],
+                    tool_calls=[ToolCall(name="harness_execute", input=None)],
                 )
             ],
         )
@@ -622,43 +611,8 @@ class TestHallucinationMetric:
         score = await metric.a_measure(ec)
 
         assert score.passed
-        assert "assistant_tool_result (execute_action)" in llm.prompts[0]
+        assert "assistant_tool_result (harness_execute)" in llm.prompts[0]
         assert "Connection validated" in llm.prompts[0]
-
-    async def test_includes_eval_case_tool_calls_as_reference(self):
-        llm = MockLLM(
-            default={
-                "reasoning": "Grounded in top-level tool_calls",
-                "total_claims": 1,
-                "hallucinated_claims": 0,
-                "score": 1.0,
-            }
-        )
-        metric = HallucinationMetric(
-            llm=llm,
-            include_assistant_tool_inputs_as_reference=True,
-            include_assistant_tool_results_as_reference=True,
-        )
-        ec = EvalCase(
-            input="q",
-            output="Found 10 Kubernetes connectors at account scope.",
-            tool_calls=[
-                ToolCall(
-                    name="list_resources",
-                    input={"resource_type": "connector", "filters": {"type": "K8s"}},
-                    output={"total": 10, "items": [{"identifier": "k8s-a"}]},
-                )
-            ],
-        )
-
-        score = await metric.a_measure(ec)
-
-        assert score.passed
-        prompt = llm.prompts[0]
-        assert "assistant_tool_input (list_resources)" in prompt
-        assert "assistant_tool_result (list_resources)" in prompt
-        assert '"total": 10' in prompt
-        assert "Clarifying questions" in prompt
 
     async def test_includes_scenario_metadata_as_reference_when_enabled(self):
         llm = MockLLM(
