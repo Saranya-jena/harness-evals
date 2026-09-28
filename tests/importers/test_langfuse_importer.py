@@ -414,7 +414,7 @@ class TestLangfuseTraceCatalog:
         assert cases[0].output == "ok"
 
     def test_trace_prompt_used_when_generation_input_missing(self):
-        """UA traces often omit generation I/O; session input must come from trace.input."""
+        """When generation observations omit I/O, session input comes from trace.input."""
         from harness_evals.importers.langfuse import LangfuseTraceCatalog
         from harness_evals.importers.otel import OTELEvalCaseSource
         from harness_evals.importers.trace_batch import SpanTrace
@@ -444,7 +444,7 @@ class TestLangfuseTraceCatalog:
         client.api.trace.get.side_effect = get_trace
 
         def get_obs(trace_id, **_kwargs):
-            # Generation observations with no input/output (prod UA shape).
+            # Generation observations with no input/output.
             return _FakeObservationList(
                 data=[
                     _FakeObservation(
@@ -495,14 +495,14 @@ class TestLangfuseTraceCatalog:
                 ),
                 _FakeObservation(
                     type="TOOL",
-                    name="harness_list",
+                    name="list_resources",
                     input={"resource_type": "pipeline"},
                     output={"items": []},
                     parent_observation_id="agent-1",
                 ),
                 _FakeObservation(
                     type="AGENT",
-                    name="chat_unified_agent",
+                    name="chat_agent",
                     input={"prompt": "Analyze the error"},
                     output=None,
                     parent_observation_id=None,
@@ -513,8 +513,8 @@ class TestLangfuseTraceCatalog:
         spans = catalog.load_spans("t-span")
         by_name = {s["name"]: s["attributes"] for s in spans}
         assert by_name["rest.request"].get("gen_ai.operation.name") != "execute_tool"
-        assert by_name["harness_list"].get("gen_ai.operation.name") == "execute_tool"
-        assert by_name["chat_unified_agent"].get("gen_ai.operation.name") == "invoke_agent"
+        assert by_name["list_resources"].get("gen_ai.operation.name") == "execute_tool"
+        assert by_name["chat_agent"].get("gen_ai.operation.name") == "invoke_agent"
 
         from harness_evals.importers.otel import OTELEvalCaseSource
         from harness_evals.importers.trace_batch import SpanTrace

@@ -186,7 +186,7 @@ class TestConversationResolution:
     async def test_waiting_user_passes(self):
         llm = MockLLM(
             default={
-                "reasoning": "Awaiting HITL approval",
+                "reasoning": "Awaiting user approval",
                 "status": "waiting_user",
                 "score": 0.8,
             }
@@ -202,7 +202,7 @@ class TestConversationResolution:
     async def test_blocked_error_fails(self):
         llm = MockLLM(
             default={
-                "reasoning": "harness_create failed and ask left unresolved",
+                "reasoning": "create_resource failed and ask left unresolved",
                 "status": "blocked_error",
                 "score": 0.1,
             }
@@ -230,13 +230,13 @@ class TestConversationResolution:
             input="q",
             output="a",
             messages=COHERENT_MESSAGES,
-            tool_calls=[ToolCall(name="harness_list", input={"resource_type": "pipeline"}, output={"items": []})],
+            tool_calls=[ToolCall(name="list_resources", input={"type": "pipeline"}, output={"items": []})],
         )
         score = await metric.a_measure(ec)
         assert not score.passed
         assert score.metadata["status"] == "unsatisfactory"
         assert "Tool evidence" in llm.prompts[0]
-        assert "harness_list" in llm.prompts[0]
+        assert "list_resources" in llm.prompts[0]
 
     async def test_partial_fails_by_default(self):
         llm = MockLLM(

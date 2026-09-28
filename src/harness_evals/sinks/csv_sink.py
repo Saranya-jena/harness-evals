@@ -21,31 +21,16 @@ _LONG_FIELDNAMES = [
     "created_at",
 ]
 
+# Built-in conversation / safety metrics used when ``pivot_metrics`` is omitted.
+# Callers should pass ``pivot_metrics`` explicitly for custom or plugin metrics.
 CONVERSATION_PIVOT_METRICS = [
-    "outcome_goal_accuracy",
     "conversation_resolution",
+    "conversation_completeness",
     "tool_use",
-    "tool_argument_match",
     "hallucination",
     "pii",
     "prompt_injection",
     "role_violation",
-    "runner_v3_usage_budget",
-    "sse_events_match",
-]
-
-# Write-flow conversation evals use qpe plugins with harness_* metric names.
-WRITE_CONVERSATION_PIVOT_METRICS = [
-    "outcome_goal_accuracy",
-    "conversation_resolution",
-    "tool_use",
-    "tool_argument_match",
-    "harness_hallucination",
-    "pii",
-    "prompt_injection",
-    "harness_role_violation",
-    "runner_v3_usage_budget",
-    "sse_events_match",
 ]
 
 CONVERSATION_PIVOT_FIELDNAMES = [
@@ -57,6 +42,10 @@ CONVERSATION_PIVOT_FIELDNAMES = [
     "total_tool_calls",
     "total_turns",
 ]
+
+_OBSERVED_USAGE_KEYS = frozenset(
+    {"duration_ms", "cost_usd", "tool_count", "num_turns", "total_tokens"}
+)
 
 
 def conversation_pivot_fieldnames(metrics: list[str]) -> list[str]:
@@ -85,12 +74,12 @@ def _format_labeled_value(value: Any, label: str) -> str:
 
 
 def _observed_usage(scores: list[Score]) -> dict[str, Any]:
+    """Return the first score ``metadata.observed`` dict that looks like usage telemetry."""
     for score in scores:
-        if score.name != "runner_v3_usage_budget":
-            continue
         metadata = score.metadata or {}
-        observed = metadata.get("observed") or {}
-        return observed if isinstance(observed, dict) else {}
+        observed = metadata.get("observed")
+        if isinstance(observed, dict) and _OBSERVED_USAGE_KEYS.intersection(observed):
+            return observed
     return {}
 
 
@@ -177,12 +166,15 @@ class CsvSink(BaseSink):
             value = score_map.get(metric)
             metric_value = None if failed else (value.value if value is not None else None)
             row[metric] = _format_labeled_value(metric_value, self.label)
-        # Prefer runner_v3 observed duration; fall back to EvalCase.latency_ms.
+        # Prefer usage telemetry on scores; fall back to EvalCase operational fields.
         duration_ms = observed.get("duration_ms")
         if duration_ms is None:
             duration_ms = eval_case.latency_ms
+        cost_usd = observed.get("cost_usd")
+        if cost_usd is None:
+            cost_usd = eval_case.cost_usd
         row["total_duration_ms"] = _format_labeled_value(duration_ms, self.label)
-        row["total_cost_usd"] = _format_labeled_value(observed.get("cost_usd"), self.label)
+        row["total_cost_usd"] = _format_labeled_value(cost_usd, self.label)
         row["total_tool_calls"] = _format_labeled_value(
             observed.get("tool_count"), self.label
         )

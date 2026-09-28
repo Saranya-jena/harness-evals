@@ -640,7 +640,7 @@ class TestOTELTimeWindowFetch:
 
 @pytest.mark.unit
 class TestLangfuseTraceIoRecovery:
-    """UA runner_v3 traces stamp prompt on langfuse.trace.input; recover when tools dominate."""
+    """Recover session prompt from langfuse.trace.input when tool spans dominate."""
 
     def test_prefers_prompt_over_user_message_when_only_tools(self):
         from harness_evals.importers.otel import _build_conversation_eval_case

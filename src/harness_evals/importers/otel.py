@@ -162,7 +162,7 @@ class OTELEvalCaseSource(BaseEvalCaseSource):
                             Default is one EvalCase per trace.
         expand_sessions     If true and the catalog implements
                             ``list_session_trace_ids``, hydrate every trace in
-                            each in-window session (HITL/resume siblings).
+                            each in-window session (resume / follow-up siblings).
         limit               Cap listed traces (catalog) or output cases (files).
         name, tags, user_id, session_id
                             Forwarded to ``TraceCatalog.list_traces``.
@@ -525,7 +525,7 @@ def _build_conversation_eval_case(spans: list[dict[str, Any]]) -> EvalCase:
             text = _text_from_langfuse_io(
                 attrs.get("langfuse.trace.input"),
                 # Prefer short `prompt` (the user question) over full `user_message`
-                # which includes <current_context> + URL JSON for UA traces.
+                # which may include injected context blobs.
                 keys=("prompt", "user_message", "text", "input"),
             )
             if text:
@@ -574,7 +574,7 @@ def _extract_user_input_from_span(attrs: dict) -> str:
     ``input_messages``, which often end with injected ``<system-reminder>`` /
     skill blobs that are role=user but are not the session prompt.
     """
-    # Langfuse trace I/O: {user_message|prompt|...} on unified-agent traces.
+    # Langfuse trace I/O: {user_message|prompt|...} shapes used by some exporters.
     for key in ("langfuse.trace.input", "langfuse.observation.input"):
         raw = attrs.get(key)
         if not raw:

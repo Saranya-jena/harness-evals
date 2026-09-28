@@ -24,7 +24,7 @@ _PROMPT_TEMPLATE = """You are a fact-checking evaluator. Determine what fraction
 Rules:
 1. Extract factual claims from the output (assertions about the world, resources, counts, IDs, statuses, errors).
 2. Treat tool inputs and tool results in the reference as ground truth. A claim that restates, summarizes, or is a reasonable paraphrase of tool I/O is NOT a hallucination — even if the same fact is not repeated elsewhere in the reference.
-3. Clarifying questions, HITL / AskUserQuestion prompts, confirmation requests, and offers to proceed are NOT hallucinations. Do not count them as claims.
+3. Clarifying questions, human-in-the-loop prompts, confirmation requests, and offers to proceed are NOT hallucinations. Do not count them as claims.
 4. Honest reports of empty results, missing resources, or tool/API errors are NOT hallucinations when they align with tool results or when the reference shows the agent attempted the lookup.
 5. A claim is "hallucinated" only if it asserts a concrete fact that is absent from AND not implied by the reference, or that contradicts the reference.
 6. Opinions, hedged statements, and general knowledge (e.g. "the sky is blue") are NOT hallucinations.

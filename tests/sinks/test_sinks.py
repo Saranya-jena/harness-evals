@@ -478,20 +478,19 @@ class TestCsvSink:
         path = tmp_path / "conversation.csv"
         sink = CsvSink(str(path), format="conversation_pivot", label="grok")
         ec = EvalCase(
-            input="Discover unique SCS component names",
+            input="List unique component names",
             output="done",
             metadata={
-                "golden_id": "code-8710e2d8-discover",
-                "scenario": "Discover unique SCS component names across repositories",
+                "golden_id": "case-discover-components",
+                "scenario": "List unique component names across repositories",
             },
         )
         scores = [
-            Score(name="outcome_goal_accuracy", value=1.0, threshold=0.7),
-            Score(name="conversation_resolution", value=0.95, threshold=0.7),
+            Score(name="hallucination", value=1.0, threshold=0.7),
             Score(
-                name="runner_v3_usage_budget",
-                value=1.0,
-                threshold=1.0,
+                name="conversation_resolution",
+                value=0.95,
+                threshold=0.7,
                 metadata={
                     "observed": {
                         "duration_ms": 45210,
@@ -508,9 +507,9 @@ class TestCsvSink:
         with open(path, newline="", encoding="utf-8") as f:
             rows = list(csv.DictReader(f))
         assert len(rows) == 1
-        assert rows[0]["golden_id"] == "code-8710e2d8-discover"
-        assert rows[0]["scenario"] == "Discover unique SCS component names across repositories"
-        assert rows[0]["outcome_goal_accuracy"] == "grok: 1"
+        assert rows[0]["golden_id"] == "case-discover-components"
+        assert rows[0]["scenario"] == "List unique component names across repositories"
+        assert rows[0]["hallucination"] == "grok: 1"
         assert rows[0]["conversation_resolution"] == "grok: 0.95"
         assert rows[0]["total_duration_ms"] == "grok: 45210"
         assert rows[0]["total_cost_usd"] == "grok: 0.12"
@@ -524,20 +523,20 @@ class TestCsvSink:
             format="conversation_pivot",
             label="sonnet-5-medium",
             pivot_metrics=[
-                "outcome_goal_accuracy",
-                "harness_hallucination",
-                "harness_role_violation",
+                "goal_accuracy",
+                "plugin_hallucination",
+                "plugin_role_violation",
             ],
         )
         ec = EvalCase(
-            input="Create cost category",
+            input="Create a cost category",
             output="done",
-            metadata={"golden_id": "ce-ccm-write", "scenario": "CCM create"},
+            metadata={"golden_id": "case-write-category", "scenario": "Create category"},
         )
         scores = [
-            Score(name="outcome_goal_accuracy", value=0.5, threshold=0.7),
-            Score(name="harness_hallucination", value=1.0, threshold=0.7),
-            Score(name="harness_role_violation", value=1.0, threshold=0.9),
+            Score(name="goal_accuracy", value=0.5, threshold=0.7),
+            Score(name="plugin_hallucination", value=1.0, threshold=0.7),
+            Score(name="plugin_role_violation", value=1.0, threshold=0.9),
         ]
         sink.write(scores, ec)
         sink.finalize()
@@ -545,8 +544,8 @@ class TestCsvSink:
         with open(path, newline="", encoding="utf-8") as f:
             row = next(csv.DictReader(f))
         assert "hallucination" not in row
-        assert row["harness_hallucination"] == "sonnet-5-medium: 1"
-        assert row["harness_role_violation"] == "sonnet-5-medium: 1"
+        assert row["plugin_hallucination"] == "sonnet-5-medium: 1"
+        assert row["plugin_role_violation"] == "sonnet-5-medium: 1"
 
     def test_conversation_pivot_target_error_shows_question_marks(self, tmp_path):
         path = tmp_path / "conversation_failed.csv"
@@ -555,27 +554,27 @@ class TestCsvSink:
             input="Trace deployment changes",
             output="",
             metadata={
-                "golden_id": "kg-n25pcy9c-deploy-change-pr-gap-readonly",
+                "golden_id": "case-deploy-trace",
                 "scenario": "Trace what changed in the most recent deployment",
                 "simulate_error": "401 Unauthorized",
             },
         )
         scores = [
             Score(
-                name="outcome_goal_accuracy",
+                name="conversation_resolution",
                 value=0.0,
                 threshold=0.7,
                 metadata={"target_error": True},
             ),
-            Score(name="runner_v3_usage_budget", value=0.0, threshold=1.0),
+            Score(name="hallucination", value=0.0, threshold=0.7),
         ]
         sink.write(scores, ec)
         sink.finalize()
 
         with open(path, newline="", encoding="utf-8") as f:
             row = next(csv.DictReader(f))
-        assert row["outcome_goal_accuracy"] == "sonnet-5-medium: ?"
-        assert row["runner_v3_usage_budget"] == "sonnet-5-medium: ?"
+        assert row["conversation_resolution"] == "sonnet-5-medium: ?"
+        assert row["hallucination"] == "sonnet-5-medium: ?"
         assert row["total_duration_ms"] == "sonnet-5-medium: ?"
         assert row["total_cost_usd"] == "sonnet-5-medium: ?"
         assert row["total_tool_calls"] == "sonnet-5-medium: ?"

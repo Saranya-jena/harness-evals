@@ -97,7 +97,7 @@ class LangfuseTraceCatalog:
         ]
         # Stamp Langfuse trace-level I/O onto every span so the OTEL conversation
         # builder can recover the user prompt when generation observations omit
-        # input/output (common for UA runner_v3 traces).
+        # input/output (common for some agent runtimes).
         trace_input = getattr(trace, "input", None)
         trace_output = getattr(trace, "output", None)
         trace_cost = getattr(trace, "total_cost", None)
@@ -585,8 +585,8 @@ def _observation_to_span(obs: object, *, trace_id: str, session_id: str | None) 
                 attrs["gen_ai.output_messages"] = [{"role": "assistant", "content": obs_output}]
     elif obs_type == "tool" or (isinstance(name, str) and name.lower().startswith("tool:")):
         # Only real tool observations — do NOT map generic Langfuse SPAN here.
-        # UA traces emit dozens of SPAN (mcp/rest/provider_call); treating them as
-        # execute_tool drops AGENT/GENERATION recovery of langfuse.trace.input.
+        # Some agent traces emit many SPAN events (mcp/rest/provider_call); treating
+        # them as execute_tool drops AGENT/GENERATION recovery of langfuse.trace.input.
         attrs["gen_ai.operation.name"] = "execute_tool"
         tool_name = name[5:] if isinstance(name, str) and name.lower().startswith("tool:") else name
         attrs["gen_ai.tool.name"] = tool_name

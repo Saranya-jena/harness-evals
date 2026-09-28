@@ -40,9 +40,18 @@ _WAITING_USER_RE = re.compile(
     r"waiting for user to review"
     r"|please (approve|confirm|review)"
     r"|approve to continue"
-    r"|review gate"
-    r"|askuserquestion",
+    r"|review gate",
     re.IGNORECASE,
+)
+
+# Tool-name hints for elicitation / human-input turns (vendor-agnostic substrings).
+_WAITING_USER_TOOL_HINTS = (
+    "askuser",
+    "ask_user",
+    "elicit",
+    "human_input",
+    "present_form",
+    "request_user",
 )
 
 _PROMPT_TEMPLATE = """You are an expert evaluator assessing whether a multi-turn agent conversation reached a meaningful resolution.
@@ -57,7 +66,7 @@ _PROMPT_TEMPLATE = """You are an expert evaluator assessing whether a multi-turn
 Assign exactly one status:
 
 - `resolved`: the latest user ask was satisfactorily addressed with a clear answer, completed action, or agreed next step the user can act on.
-- `waiting_user`: the agent is correctly blocked on the user — AskUserQuestion, HITL/review-gate approval, or an explicit required clarification. This is resolution *in progress*, not failure.
+- `waiting_user`: the agent is correctly blocked on the user — a clarifying question, human-in-the-loop / review-gate approval, or an explicit required clarification. This is resolution *in progress*, not failure.
 - `partial`: tools and/or reply made some progress but the ask is only partly answered (missing key details, unfinished multi-part request).
 - `unsatisfactory`: tools may have succeeded, but the final user-visible answer does **not** satisfactorily address the ask (wrong, evasive, off-topic, or contradicts tool evidence).
 - `blocked_error`: a tool/API/runtime failure (or equivalent hard error) left the ask unresolved, and the agent did not recover or provide a clear unblock path.
@@ -68,7 +77,7 @@ Rules:
 1. Tool success alone is NOT resolution — the final answer must still address the ask (`unsatisfactory` if it does not).
 2. Tool failure alone is NOT automatic failure — if the agent still solves the ask another way, or clearly explains the blocker and what the user must do next, use `resolved` or `waiting_user`.
 3. Unresolved after tool failure (no recovery, no clear next step) → `blocked_error`.
-4. HITL / AskUserQuestion / "waiting for user to review" → `waiting_user`, not `abandoned`.
+4. Human-in-the-loop prompts / clarifying questions / "waiting for user to review" → `waiting_user`, not `abandoned`.
 5. Prefer evidence in tool results/args over the assistant's prose when they conflict.
 
 Respond with JSON:
@@ -150,7 +159,7 @@ class ConversationResolutionMetric(BaseMetric):
                 name=self.name,
                 value=_STATUS_SCORE["waiting_user"],
                 threshold=self.threshold,
-                reason="waiting_user heuristic: last turn asks the user / HITL review gate",
+                reason="waiting_user heuristic: last turn asks the user / review gate",
                 metadata={
                     "status": "waiting_user",
                     "heuristic": True,
@@ -243,11 +252,14 @@ def _collect_tool_calls(eval_case: EvalCase) -> list[ToolCall]:
     return top_level if len(top_level) >= len(message_tool_calls) else message_tool_calls
 
 
+def _is_waiting_user_tool(name: str) -> bool:
+    lowered = (name or "").lower()
+    return any(hint in lowered for hint in _WAITING_USER_TOOL_HINTS)
+
+
 def _looks_like_waiting_user(messages: list[Message], tool_calls: list[ToolCall]) -> bool:
-    if tool_calls:
-        last_name = (tool_calls[-1].name or "").lower()
-        if last_name in {"askuserquestion", "present_form"} or "askuser" in last_name:
-            return True
+    if tool_calls and _is_waiting_user_tool(tool_calls[-1].name or ""):
+        return True
 
     for msg in reversed(messages):
         if msg.role != "assistant":
@@ -256,8 +268,7 @@ def _looks_like_waiting_user(messages: list[Message], tool_calls: list[ToolCall]
         if _WAITING_USER_RE.search(content):
             return True
         for tc in msg.tool_calls or []:
-            name = (tc.name or "").lower()
-            if name in {"askuserquestion", "present_form"} or "askuser" in name:
+            if _is_waiting_user_tool(tc.name or ""):
                 return True
         break
     return False
