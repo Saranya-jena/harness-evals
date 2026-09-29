@@ -5,6 +5,14 @@ All notable changes to harness-evals will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.2]
+
+### Fixed
+
+- **Canonical rate-card models**: price a requested model directly when it already
+  matches an active canonical rate identity and no alias row matches, while
+  preserving explicit alias precedence and ambiguity handling.
+
 ## [0.24.1]
 
 ### Added
