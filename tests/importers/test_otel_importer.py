@@ -802,3 +802,34 @@ class TestLangfuseTraceIoRecovery:
         ec = _build_conversation_eval_case(spans)
         assert ec.input == "Ask a support question"
         assert ec.output == "done"
+
+    def test_output_messages_list_content_does_not_crash(self):
+        """Assistant content may be multipart list (Langfuse / GenAI exporters)."""
+        from harness_evals.importers.otel import _build_conversation_eval_case
+
+        spans = [
+            {
+                "name": "chat.completion",
+                "span_id": "1",
+                "trace_id": "t-list-content",
+                "parent_span_id": None,
+                "attributes": {
+                    "langfuse.observation.type": "generation",
+                    "gen_ai.input_messages": [{"role": "user", "content": "hi"}],
+                    "gen_ai.output_messages": [
+                        {
+                            "role": "assistant",
+                            "content": [
+                                {"type": "text", "text": "hello "},
+                                {"type": "text", "text": "world"},
+                            ],
+                        }
+                    ],
+                },
+                "start_time_unix_nano": 1,
+                "end_time_unix_nano": 2,
+            }
+        ]
+        ec = _build_conversation_eval_case(spans)
+        assert "hello" in (ec.output or "")
+        assert "world" in (ec.output or "")

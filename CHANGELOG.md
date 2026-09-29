@@ -5,6 +5,16 @@ All notable changes to harness-evals will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.3]
+
+### Fixed
+
+- **OTEL / Langfuse list-shaped assistant content**:
+  `_extract_output_from_span` no longer crashes with
+  `TypeError: sequence item 0: expected str instance, list found` when
+  `gen_ai.output_messages[].content` is a multipart list. Session merges
+  also skip individual malformed traces instead of aborting the batch.
+
 ## [0.24.2]
 
 ### Fixed
