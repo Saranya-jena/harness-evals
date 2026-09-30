@@ -5,6 +5,14 @@ All notable changes to harness-evals will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.3]
+
+### Fixed
+
+- **OTEL / Langfuse hydrate**: `_hydrate_catalog_traces` skips individual traces
+  that fail `load_spans` (e.g. Langfuse `Observations in trace are too large`)
+  instead of aborting the whole online session batch via `asyncio.gather`.
+
 ## [0.24.2]
 
 ### Fixed
