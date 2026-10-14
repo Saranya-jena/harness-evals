@@ -73,18 +73,18 @@ class TestConversationGolden:
 
     def test_request_context_roundtrip(self):
         original = ConversationGolden(
-            scenario="DBOPS schema edit",
-            expected_outcome="Changeset drafted",
+            scenario="Edit selected resource",
+            expected_outcome="Change drafted",
             context=["Org: demo"],
             request_context={
-                "dbops_schema_id": "users-schema",
-                "dbops_instance_id": "prod-instance",
+                "resource_id": "users-table",
+                "environment_id": "prod",
             },
         )
         restored = ConversationGolden.from_dict(original.to_dict())
         assert restored.request_context == {
-            "dbops_schema_id": "users-schema",
-            "dbops_instance_id": "prod-instance",
+            "resource_id": "users-table",
+            "environment_id": "prod",
         }
         assert restored.context == ["Org: demo"]
 
@@ -245,16 +245,16 @@ class TestConversationDatasetIO:
         assert loaded[0].context == ["Project: demo"]
 
     def test_load_request_context_resolves_env(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("DBOPS_SCHEMA", "users-schema")
+        monkeypatch.setenv("RESOURCE_ID", "users-table")
         path = tmp_path / "test.jsonl"
         path.write_text(
             json.dumps(
                 {
-                    "scenario": "Edit schema",
-                    "expected_outcome": "Changeset drafted",
+                    "scenario": "Edit resource",
+                    "expected_outcome": "Change drafted",
                     "request_context": {
-                        "dbops_schema_id": "${DBOPS_SCHEMA}",
-                        "dbops_instance_id": "prod-instance",
+                        "resource_id": "${RESOURCE_ID}",
+                        "environment_id": "prod",
                     },
                 }
             )
@@ -264,8 +264,8 @@ class TestConversationDatasetIO:
         loaded = load_conversation_dataset(path)
 
         assert loaded[0].request_context == {
-            "dbops_schema_id": "users-schema",
-            "dbops_instance_id": "prod-instance",
+            "resource_id": "users-table",
+            "environment_id": "prod",
         }
 
     def test_load_missing_env_value_raises(self, tmp_path):

@@ -259,17 +259,17 @@ async def test_conversational_streaming_target_merges_request_context_on_user_an
     monkeypatch.setattr(target, "_execute_with_retries", fake_execute)
     simulator = ConversationSimulator(max_concurrent=1)
     golden = ConversationGolden(
-        id="dbops-row",
+        id="resource-row",
         scenario="Add column",
-        expected_outcome="Changeset drafted",
+        expected_outcome="Change drafted",
         mode=ConversationMode.SCRIPTED,
         turns=[
             Message(role="user", content="Add email column"),
             Message(role="user", content="Also add phone"),
         ],
         request_context={
-            "dbops_schema_id": "users-schema",
-            "dbops_instance_id": "prod-instance",
+            "resource_id": "users-table",
+            "environment_id": "prod",
             "nested": {"extra": True},
         },
     )
@@ -278,8 +278,8 @@ async def test_conversational_streaming_target_merges_request_context_on_user_an
 
     expected_context = {
         "is_v2": True,
-        "dbops_schema_id": "users-schema",
-        "dbops_instance_id": "prod-instance",
+        "resource_id": "users-table",
+        "environment_id": "prod",
         "nested": {"keep": True, "extra": True},
     }
     assert len(bodies) == 2
@@ -320,7 +320,7 @@ async def test_conversational_streaming_target_merges_request_context_on_human_i
 
     target.conversation_id = "conv-1"
     target.session_id = "sess-1"
-    token = set_request_context({"dbops_schema_id": "users-schema"})
+    token = set_request_context({"resource_id": "users-table"})
     try:
         await target.agenerate(
             [Message(role="user", content="continue")],
@@ -331,7 +331,7 @@ async def test_conversational_streaming_target_merges_request_context_on_human_i
 
     assert captured["body"]["context"] == {
         "is_v2": True,
-        "dbops_schema_id": "users-schema",
+        "resource_id": "users-table",
     }
 
 
@@ -392,7 +392,7 @@ async def test_conversational_streaming_target_request_context_overrides_templat
 
     from harness_evals.conversation.context import reset_request_context, set_request_context
 
-    token = set_request_context({"mode": "dbops", "dbops_schema_id": "s1"})
+    token = set_request_context({"mode": "custom", "resource_id": "r1"})
     try:
         await target.agenerate([Message(role="user", content="hello")])
     finally:
@@ -400,8 +400,8 @@ async def test_conversational_streaming_target_request_context_overrides_templat
 
     assert captured["body"]["context"] == {
         "is_v2": True,
-        "mode": "dbops",
-        "dbops_schema_id": "s1",
+        "mode": "custom",
+        "resource_id": "r1",
     }
 
 

@@ -35,12 +35,12 @@ def reset_conversation_key(token: contextvars.Token[str | None]) -> None:
 
 
 def set_request_context(context: dict[str, Any] | None) -> contextvars.Token[dict[str, Any] | None]:
-    """Bind per-golden chat API ``context`` fields for the current async task."""
+    """Bind per-golden request-body ``context`` fields for the current async task."""
     return _request_context.set(context)
 
 
 def get_request_context() -> dict[str, Any] | None:
-    """Read per-golden chat API ``context`` fields for the current async task."""
+    """Read per-golden request-body ``context`` fields for the current async task."""
     return _request_context.get()
 
 

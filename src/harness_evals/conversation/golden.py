@@ -51,9 +51,10 @@ class ConversationGolden:
     # Optional expected tool trajectory for tool_argument_match (short names, e.g.
     # validate_pipeline_yaml / harness_create — not mcp__* prefixes).
     expected_tool_calls: list[ToolCall] | None = field(default=None)
-    # Per-row chat API ``context`` payload (e.g. dbops_schema_id). Distinct from
-    # ``context`` (simulator steering strings). Deep-merged into the request
-    # body's ``context`` by ConversationalStreamingHttpTarget.
+    # Per-row request-body ``context`` payload (arbitrary JSON-serializable
+    # fields). Distinct from ``context`` (simulator steering strings).
+    # Deep-merged into the request body's ``context`` by
+    # ConversationalStreamingHttpTarget.
     request_context: dict[str, Any] | None = field(default=None)
     mode: ConversationMode | None = None
     graph_config: dict | None = field(default=None)

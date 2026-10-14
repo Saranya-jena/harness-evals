@@ -13,9 +13,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   top-level `request_context` (dict). During simulation,
   `ConversationalStreamingHttpTarget` deep-merges it into the chat request
   body's `context` on user, continue, and human-input turns (YAML template
-  defaults retained; golden keys override). Use this for UI-injected fields
-  such as `dbops_schema_id` / `dbops_instance_id` without embedding them in
-  the prompt. Distinct from golden `context` (`list[str]` simulator steering).
+  defaults retained; golden keys override). Use this for per-row request
+  payload fields that should not be embedded in the prompt. Distinct from
+  golden `context` (`list[str]` simulator steering).
 
 ## [0.25.4]
 
